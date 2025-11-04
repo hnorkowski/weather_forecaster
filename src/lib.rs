@@ -48,26 +48,7 @@ impl WeatherOptions {
     }
 
     pub fn get_default_reintroduction_probabiliy(&self) -> f64 {
-        // TODO: This is a bad approach: It will cause options with low reintroduction rate to happen more often in the first sessions and less often in the last session.
-        // maybe an inverse of the default probability (with a constant factor) is a good option?
-        // or randomizing the order of the sessions?
-        match self {
-            WeatherOptions::Clear => 0.4,
-            WeatherOptions::LightCloud => 0.3,
-            WeatherOptions::MediumCloud => 0.2,
-            WeatherOptions::HeavyCloud => 0.1,
-            WeatherOptions::Overcast => 0.1,
-            WeatherOptions::LightRain => 0.05,
-            WeatherOptions::Rain => 0.025,
-            WeatherOptions::Storm => 0.025,
-            WeatherOptions::Thunderstorm => 0.025,
-            WeatherOptions::Foggy => 0.1,
-            WeatherOptions::FogWithRain => 0.025,
-            WeatherOptions::HeavyFog => 0.1,
-            WeatherOptions::HeavyFogWithRain => 0.025,
-            WeatherOptions::Hazy => 0.1,
-            WeatherOptions::Random => 0.1,
-        }
+        1.0 + self.get_default_probabiliy() * 0.5
     }
 
     pub fn get_group(&self) -> &[WeatherOptions] {
@@ -219,14 +200,9 @@ impl WeatherForecaster {
             let factor = option.get_default_reintroduction_probabiliy();
 
             if *probability - 0.001 <= 0.0 {
-                *probability = default_probabiliy * factor;
+                *probability = factor - 1.0;
             } else if *probability + 0.001 < default_probabiliy {
-                *probability *= factor;
-                if *probability > default_probabiliy {
-                    *probability = default_probabiliy;
-                    eprintln!("Reset"); // TODO: remove this
-                }
-
+                *probability = (*probability * factor).clamp(0.0, default_probabiliy);
             }
         }
         self.normalize_probabilities();
