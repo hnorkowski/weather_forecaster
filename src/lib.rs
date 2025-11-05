@@ -6,6 +6,8 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
+pub mod plot;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter, Serialize, Deserialize)]
 pub enum WeatherOptions {
     Clear,
@@ -111,6 +113,7 @@ impl std::fmt::Display for Sessions {
 pub struct WeatherForecaster {
     initial_probabilities: HashMap<WeatherOptions, f64>,
     current_probabilities: HashMap<WeatherOptions, f64>,
+    pub history: HashMap<WeatherOptions, Vec<f64>>,
 }
 
 impl WeatherForecaster {
@@ -145,7 +148,15 @@ impl WeatherForecaster {
         }
         let current_probabilities = initial_probabilities.clone();
 
-        Self { initial_probabilities, current_probabilities }
+        let history = WeatherOptions::iter()
+            .map(|option| (option, Vec::new()))
+            .collect();
+
+        Self {
+            initial_probabilities,
+            current_probabilities,
+            history,
+        }
     }
 
     pub fn generate_next_forecast(
@@ -158,26 +169,32 @@ impl WeatherForecaster {
         for session in sessions {
             let mut weather = Vec::new();
             for _ in 0..weather_slots {
-                // TODO: reintroduce options
                 let next_option: f64 = rng.random();
                 let mut current_value = 0.0;
                 for option in WeatherOptions::iter() {
                     current_value += self.current_probabilities.get(&option).unwrap();
                     if current_value > next_option {
+                        self.update_history();
                         self.disable_group(&option);
                         self.normalize_probabilities();
-                        dbg!(&self.current_probabilities);
-                        self.reintroduce_probabilities();
                         weather.push(option);
                         break;
                     }
                 }
+                self.reintroduce_probabilities();
             }
             assert_eq!(weather.len(), weather_slots);
             forecast.forecast.insert(*session, weather);
         }
 
         forecast
+    }
+
+    fn update_history(&mut self) {
+        for option in WeatherOptions::iter() {
+            let probability = *self.current_probabilities.get(&option).unwrap();
+            self.history.get_mut(&option).unwrap().push(probability);
+        }
     }
 
     fn disable_group(&mut self, weather_option: &WeatherOptions) {
@@ -202,7 +219,7 @@ impl WeatherForecaster {
             if *probability - 0.001 <= 0.0 {
                 *probability = factor - 1.0;
             } else if *probability + 0.001 < default_probabiliy {
-                *probability = (*probability * factor).clamp(0.0, default_probabiliy);
+                *probability *= factor;
             }
         }
         self.normalize_probabilities();

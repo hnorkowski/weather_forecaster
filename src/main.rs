@@ -8,17 +8,21 @@ use clap::Parser;
 use cli_clipboard::{ClipboardContext, ClipboardProvider};
 use serde::{Deserialize, Serialize};
 
-use weather_forecaster::{Sessions, WeatherForecaster, WeatherOptions};
+use weather_forecaster::{Sessions, WeatherForecaster, WeatherOptions, plot};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Config {
     starting_probabilities: HashMap<WeatherOptions, f64>,
+    plot_probabilities: bool,
+    set_clipboard: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
             starting_probabilities: WeatherOptions::get_default_probablities(),
+            plot_probabilities: false,
+            set_clipboard: false,
         }
     }
 }
@@ -52,27 +56,34 @@ struct Args {
 }
 
 fn main() {
-    let args = dbg!(Args::parse());
+    let args = Args::parse();
 
     if !std::fs::exists(&args.config_file).unwrap_or_print() {
         Config::generate_default_config(&args.config_file);
     }
 
-    let config: Config = dbg!(
+    let config: Config =
         serde_yaml::from_str(&std::fs::read_to_string(&args.config_file).unwrap_or_print())
-            .unwrap_or_print()
-    );
+            .unwrap_or_print();
 
-    let mut forcaster = WeatherForecaster::new(config.starting_probabilities);
+    let mut forecaster = WeatherForecaster::new(config.starting_probabilities);
 
-    let forecast = forcaster.generate_next_forecast(&args.sessions, args.weather_slots);
+    let forecast = forecaster.generate_next_forecast(&args.sessions, args.weather_slots);
 
     println!("Forecast for your next Raceday:");
     println!("// {}\n", "=".repeat(80));
     print!("{forecast}");
     println!("// {}", "=".repeat(80));
 
-    if let Ok(mut clipboard) = ClipboardContext::new() {
+    if config.plot_probabilities
+        && let Err(error) = plot::plot_history(&forecaster.history)
+    {
+        eprintln!("Plotting failed: {error}");
+    }
+
+    if let Ok(mut clipboard) = ClipboardContext::new()
+        && config.set_clipboard
+    {
         clipboard.set_contents(forecast.to_string()).unwrap();
     }
 }
