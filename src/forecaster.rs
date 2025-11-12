@@ -344,7 +344,7 @@ impl std::fmt::Display for WeatherForecast {
             if let Some(forecast) = self.forecast.get(&session) {
                 writeln!(f, r#""{session}WeatherSlots": {},"#, forecast.len())?;
                 for (index, option) in forecast.iter().enumerate() {
-                    writeln!(f, r#""{session}WeatherSlot{index}": "{option:?}","#)?;
+                    writeln!(f, r#""{session}WeatherSlot{}": "{option:?}","#, index + 1)?;
                 }
                 writeln!(f)?;
             }
